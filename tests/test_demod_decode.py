@@ -45,6 +45,21 @@ def test_2fsk_hard_decision_recovers_known_tones() -> None:
     assert np.array_equal(decoded, source_bits)
 
 
+def test_16qam_hard_decision_preserves_iq_bit_pair_order() -> None:
+    source_bits = np.asarray(
+        [[0, 0, 1, 1], [1, 1, 0, 0], [0, 1, 1, 0]],
+        dtype=np.uint8,
+    )
+    levels = np.asarray([-3, -1, 1, 3]) / np.sqrt(10)
+    symbols = (
+        levels[2 * source_bits[:, 0] + source_bits[:, 1]]
+        + 1j * levels[2 * source_bits[:, 2] + source_bits[:, 3]]
+    )
+    samples = np.repeat(symbols, 4)
+    decoded = demodulate(samples, scheme="16QAM", samples_per_symbol=4)
+    assert np.array_equal(decoded, source_bits.reshape(-1))
+
+
 def test_viterbi_decodes_terminated_rate_half_code() -> None:
     payload = np.asarray([1, 0, 1, 1, 0, 0, 1, 0], dtype=np.uint8)
     terminated = np.concatenate((payload, np.zeros(6, dtype=np.uint8)))

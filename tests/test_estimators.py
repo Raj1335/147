@@ -55,6 +55,34 @@ def test_estimator_and_auto_demodulator_recover_qpsk_with_carrier_offset() -> No
     assert np.array_equal(decoded, bits)
 
 
+def test_estimator_and_auto_demodulator_recover_bpsk_with_carrier_offset() -> None:
+    sample_rate = 64_000
+    samples_per_symbol = 8
+    rng = np.random.default_rng(12)
+    bits = rng.integers(0, 2, 512, dtype=np.uint8)
+    baseband = np.repeat(1.0 - 2.0 * bits, samples_per_symbol).astype(np.complex128)
+    time = np.arange(baseband.size) / sample_rate
+    received = baseband * np.exp(1j * (2 * np.pi * 1_000 * time + 0.37))
+    estimate = classify_modulation(received, sample_rate)
+    assert estimate.modulation == "BPSK"
+    decoded = demodulate_from_estimate(received, estimate, sample_rate)
+    assert np.array_equal(decoded, bits)
+
+
+def test_estimator_and_auto_demodulator_recover_16qam_with_carrier_offset() -> None:
+    sample_rate = 64_000
+    samples_per_symbol = 8
+    symbols, bits = _fixture("16QAM")
+    baseband = np.repeat(symbols, samples_per_symbol)
+    carrier_offset = 1_000.0
+    time = np.arange(baseband.size) / sample_rate
+    received = baseband * np.exp(1j * (2 * np.pi * carrier_offset * time + 0.37))
+    estimate = classify_modulation(received, sample_rate)
+    assert estimate.modulation == "16QAM"
+    decoded = demodulate_from_estimate(received, estimate, sample_rate)
+    assert np.array_equal(decoded, bits)
+
+
 def test_tone_capture_does_not_receive_a_false_modulation_label() -> None:
     sample_rate = 64_000
     time = np.arange(4096) / sample_rate

@@ -4,6 +4,9 @@ __pycache__/
 *.py[cod]
 .streamlit/secrets.toml
 data/
+sih26147/dsd/
+no84/
+no84.zip
 models/
 reports/
 SIH26147_Blueprint-claude.md

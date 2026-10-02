@@ -31,12 +31,15 @@ def demodulate(
         labels = np.rint(phase * order / (2.0 * np.pi)).astype(int) % order
         return _integers_to_bits(labels, int(np.log2(order)))
     if scheme == "16QAM":
-        levels = np.asarray([-3.0, -1.0, 1.0, 3.0])
+        symbols /= max(float(np.sqrt(np.mean(np.abs(symbols) ** 2))), 1e-12)
+        levels = np.asarray([-3.0, -1.0, 1.0, 3.0]) / np.sqrt(10.0)
         i_levels = levels[np.argmin(np.abs(symbols.real[:, None] - levels), axis=1)]
         q_levels = levels[np.argmin(np.abs(symbols.imag[:, None] - levels), axis=1)]
         i_labels = np.searchsorted(levels, i_levels)
         q_labels = np.searchsorted(levels, q_levels)
-        return np.column_stack((_integers_to_bits(i_labels, 2), _integers_to_bits(q_labels, 2))).reshape(-1)
+        i_bits = _integers_to_bits(i_labels, 2).reshape(-1, 2)
+        q_bits = _integers_to_bits(q_labels, 2).reshape(-1, 2)
+        return np.column_stack((i_bits, q_bits)).reshape(-1)
     if scheme == "2FSK":
         if (
             fsk_deviation_hz is None
@@ -113,12 +116,15 @@ def demodulate_from_estimate(
     times = timing_offset + np.arange(count) * spacing
     symbols = np.interp(times, indices, x.real) + 1j * np.interp(times, indices, x.imag)
     symbols *= np.exp(1j * estimate.phase_rotation_rad)
+    symbols /= max(float(np.sqrt(np.mean(np.abs(symbols) ** 2))), 1e-12)
     if estimate.modulation == "16QAM":
         levels = np.asarray([-3.0, -1.0, 1.0, 3.0]) / np.sqrt(10.0)
         i_index = np.argmin(np.abs(symbols.real[:, None] - levels), axis=1)
         q_index = np.argmin(np.abs(symbols.imag[:, None] - levels), axis=1)
+        i_bits = _integers_to_bits(i_index, 2).reshape(-1, 2)
+        q_bits = _integers_to_bits(q_index, 2).reshape(-1, 2)
         return np.column_stack(
-            (_integers_to_bits(i_index, 2), _integers_to_bits(q_index, 2))
+            (i_bits, q_bits)
         ).reshape(-1)
     constellation = _constellations()[estimate.modulation]
     decisions = np.argmin(np.abs(symbols[:, None] - constellation[None, :]), axis=1)

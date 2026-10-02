@@ -222,3 +222,7 @@ Before describing a model as validated, retain and review:
 - evidence that artifact predictions work on intended hardware/data without leaking test recordings.
 
 **Current status:** the trainer and workflow are implemented, but no qualifying real-data classifier is shipped. Automatic FEC/interleaver identification and protocol/frame synchronization are also outside this classifier-training workflow.
+
+## Reference decode validation in the app
+
+The app's **Validation lab** runs a deterministic known-answer vertical slice: a generated payload is convolutionally encoded, BPSK-modulated, demodulated, and Viterbi-decoded. A passing result means the controlled software chain exactly recovered that generated payload. It does not establish blind modulation-classification performance or validate any unknown/real capture. Use independent ground-truth recordings and report their held-out results before claiming real-signal performance.

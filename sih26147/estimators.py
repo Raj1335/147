@@ -143,16 +143,15 @@ def classify_modulation(
             if name in {"BPSK", "QPSK", "8PSK", "16QAM"}:
                 power_order = order
                 powers = symbols**power_order
-                phase = np.angle(np.mean(powers)) / order
                 period = 2.0 * np.pi / order
-                if name == "16QAM":
-                    reference_phase = np.angle(np.mean(_constellations()[name] ** power_order))
-                    candidate_rotation = float((reference_phase - np.angle(np.mean(powers))) / power_order)
-                else:
-                    candidate_rotation = float(-phase % period)
+                reference_phase = np.angle(np.mean(points**power_order)) / power_order
+                observed_phase = np.angle(np.mean(powers)) / power_order
+                candidate_rotation = float(
+                    (reference_phase - observed_phase + period / 2) % period - period / 2
+                )
                 rotations = np.asarray([candidate_rotation, *rotations])
             for rotation in rotations:
-                rotated_points = points * np.exp(1j * rotation)
+                rotated_points = points * np.exp(-1j * rotation)
                 distances = np.abs(symbols[:, None] - rotated_points[None, :])
                 nearest_index = np.argmin(distances, axis=1)
                 nearest = rotated_points[nearest_index]
@@ -172,7 +171,17 @@ def classify_modulation(
     fsk_fit = _fsk_fit(x, sample_rate_hz, estimated_rate)
     if fsk_fit is not None:
         residuals["2FSK"] = fsk_fit[0]
-    ranked = sorted(residuals.items(), key=lambda item: item[1])
+    constellation_ranked = sorted(
+        ((name, value) for name, value in residuals.items() if name != "2FSK"),
+        key=lambda item: item[1],
+    )
+    if (
+        fsk_fit is not None
+        and fsk_fit[0] + 1e-6 < constellation_ranked[0][1]
+    ):
+        ranked = sorted(residuals.items(), key=lambda item: item[1])
+    else:
+        ranked = constellation_ranked
     winner, evm = ranked[0]
     fsk_parameters = fsk_fit if winner == "2FSK" else None
     frequency_offset = fsk_parameters[1] if fsk_parameters else offsets.get(winner, 0.0)
