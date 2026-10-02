@@ -9,6 +9,7 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
+from sih26147.analog import audio_to_wav, demodulate_analog
 from sih26147.analysis import SignalAnalysis, analyze_capture
 from sih26147.decode import deinterleave, ldpc_decode, rs_decode, viterbi_decode
 from sih26147.demod import (
@@ -191,6 +192,8 @@ def main() -> None:
                 st.session_state["capture"] = capture
                 st.session_state["analysis"] = result
                 st.session_state["bits"] = ""
+                st.session_state.pop("analog_audio_wav", None)
+                st.session_state.pop("analog_audio_details", None)
                 model_path = Path("models/modulation.joblib")
                 if model_path.is_file():
                     st.session_state["trained_prediction"] = predict_with_trained_model(
@@ -425,6 +428,77 @@ def _show_processing(capture: Capture, analysis: SignalAnalysis) -> None:
             mime="text/plain",
             disabled=not bool(st.session_state.get("bits")),
         )
+        st.divider()
+        st.subheader("Analog audio demodulation")
+        st.caption(
+            "Operator-selected AM envelope, FM discriminator, or keyed-carrier CW sidetone. "
+            "This does not automatically identify analog modulation or recover stereo/protocol framing."
+        )
+        analog_scheme = st.selectbox(
+            "Known analog mode",
+            ("AM", "FM", "CW"),
+            key="analog_scheme",
+        )
+        analog_options = st.columns(2)
+        if analog_scheme == "CW":
+            analog_options[0].number_input(
+                "CW sidetone (Hz)",
+                min_value=100.0,
+                max_value=2_000.0,
+                value=700.0,
+                step=50.0,
+                key="analog_cw_tone",
+            )
+        output_rates = tuple(
+            rate for rate in (8_000, 12_000, 16_000, 24_000) if rate <= capture.sample_rate_hz
+        )
+        if not output_rates:
+            output_rates = (max(1, int(round(capture.sample_rate_hz))),)
+        output_rate = analog_options[1].selectbox(
+            "Audio export sample rate",
+            output_rates,
+            index=min(1, len(output_rates) - 1),
+            format_func=lambda rate: f"{rate:,} Hz",
+            key=f"analog_output_rate_{int(round(capture.sample_rate_hz))}",
+        )
+        if st.button("Demodulate to audio", key="run_analog_demod"):
+            st.session_state.pop("analog_audio_wav", None)
+            st.session_state.pop("analog_audio_details", None)
+            try:
+                audio = demodulate_analog(
+                    capture.samples,
+                    scheme=analog_scheme,
+                    sample_rate_hz=capture.sample_rate_hz,
+                    cw_tone_hz=float(st.session_state.get("analog_cw_tone", 700.0)),
+                )
+                wav = audio_to_wav(
+                    audio,
+                    source_sample_rate_hz=capture.sample_rate_hz,
+                    output_sample_rate_hz=int(output_rate),
+                )
+                st.session_state["analog_audio_wav"] = wav
+                st.session_state["analog_audio_details"] = (
+                    analog_scheme,
+                    capture.source_name,
+                    int(output_rate),
+                )
+                st.success("Audio recovered. Listen and verify it before using or interpreting the result.")
+            except ValueError as exc:
+                st.error(f"Analog audio demodulation failed: {exc}")
+        if "analog_audio_wav" in st.session_state:
+            st.audio(st.session_state["analog_audio_wav"], format="audio/wav")
+            mode, source_name, rate = st.session_state["analog_audio_details"]
+            if mode == "FM":
+                st.caption(f"FM discriminator · normalized audio · {rate:,} Hz PCM")
+            else:
+                st.caption(f"{mode} demodulator · {rate:,} Hz PCM · source: {source_name}")
+            st.download_button(
+                "Download recovered audio (WAV)",
+                data=st.session_state["analog_audio_wav"],
+                file_name=f"{Path(source_name).stem}-{mode.lower()}-audio.wav",
+                mime="audio/wav",
+                key="download_analog_audio",
+            )
     with deinterleave_tab:
         st.caption("These operations invert the specific parameterized interleavers implemented here; unknown framing is not inferred.")
         if st.button("Load demodulated bits", key="load_demodulated_for_deinterleave"):
@@ -607,11 +681,21 @@ def _show_report(result: SignalAnalysis) -> None:
             "The blind modulation/symbol-rate estimate is untrained, uncalibrated, and not guaranteed.",
             "FEC and interleaver types/parameters are not automatically inferred.",
             "Manual demodulation requires known symbol timing and does not recover frame synchronization.",
+            "AM/FM/CW audio modes are operator-selected envelope/discriminator/keyed-carrier demodulators, not automatic modulation identification.",
             "Validate recovered bits with known synchronization, CRC, or independent ground truth.",
         ],
     }
     if "trained_prediction" in st.session_state:
         report["trained_model_result"] = st.session_state["trained_prediction"]
+    if "analog_audio_details" in st.session_state:
+        mode, source_name, output_rate = st.session_state["analog_audio_details"]
+        report["analog_audio_demodulation"] = {
+            "mode": mode,
+            "source_name": source_name,
+            "source_sample_rate_hz": result.sample_rate_hz,
+            "output_sample_rate_hz": output_rate,
+            "audio_file": f"{Path(source_name).stem}-{mode.lower()}-audio.wav",
+        }
     validation = st.session_state.get("reference_validation")
     if validation is not None:
         report["reference_validation"] = {

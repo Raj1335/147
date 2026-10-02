@@ -226,3 +226,5 @@ Before describing a model as validated, retain and review:
 ## Reference decode validation in the app
 
 The app's **Validation lab** runs a deterministic known-answer vertical slice: a generated payload is convolutionally encoded, BPSK-modulated, demodulated, and Viterbi-decoded. A passing result means the controlled software chain exactly recovered that generated payload. It does not establish blind modulation-classification performance or validate any unknown/real capture. Use independent ground-truth recordings and report their held-out results before claiming real-signal performance.
+
+The **Decode chain** also provides operator-selected AM envelope, FM discriminator, and keyed-carrier CW sidetone audio recovery, with anti-aliased PCM WAV export. These are conventional mono/baseband demodulators; they do not identify the mode, perform stereo or protocol decoding, or establish that an unknown recording is broadcast audio. Confirm mode, tune/window, and output by listening and checking trusted references.
