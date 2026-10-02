@@ -38,6 +38,8 @@ This requests bytes 0–16,777,215 using HTTP Range and stores an adjacent prove
 
 ## Training requirements and limits
 
+For the full step-by-step annotation, manifest, audit, training, evaluation, and vibe-coding workflow, see [`../TRAINING_GUIDE.md`](../TRAINING_GUIDE.md).
+
 `real_capture_manifest.example.csv` is a schema-only template. Populate it only after manually selecting windows and verifying their labels. `capture_group` must identify the independent recording/session, not each window cut from one recording. Include exact provenance, license, and annotation source for every row.
 
 The trainer (`train_model.py`) deliberately:

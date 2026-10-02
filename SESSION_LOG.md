@@ -154,6 +154,24 @@ Build/test success is not sponsor validation, operational fitness, or evidence o
 
 The prior 22-test count and earlier statements that no symbol-rate estimate existed describe the foundation milestone only; the follow-up above supersedes them. Important unsolved system-level requirements remain: sample-accurate ground-truth annotations and independent real captures, demonstrated real-world accuracy, automatic FEC/interleaver inference, protocol/frame synchronization, sponsor validation, and an actual user-controlled hosting deployment.
 
+## 8. Training guide for prompt-driven development
+
+### Request
+
+The user requested a Markdown guide for training, explicitly structured to make “vibe coding” possible.
+
+### Actions and reasons
+
+- Inspected the actual training API/CLI, test guard, manifest template, current capture acquisition notes, feature extraction, group-aware holdout, and app model-loading hook. This ensures the instructions match implemented behavior rather than describe an imagined workflow.
+- Added `TRAINING_GUIDE.md` with a complete real-capture workflow, exact manifest schema, Windows PowerShell commands, annotation/audit cautions, model evaluation interpretation, app verification steps, failure triage, and copy-ready coding-assistant prompts for incremental training-system improvements.
+- Emphasized that the local 16 MiB capture prefix is not labeled/training-ready and that windows from one recording must never be split across train/test groups.
+- Linked the guide from the top-level README and dataset documentation so it can be found from either starting point.
+- A final documentation integrity check detected the same malformed NUL-interleaved suffix after the README's final paragraph; removed only the stray suffix and verified the touched Markdown files are valid UTF-8 with no NUL bytes.
+
+### Result
+
+The guide is aligned with the current trainer: its real-origin/provenance checks, minimum four-row manifest, maximum one-million-sample windows, two-group-per-class code floor, group-disjoint holdout, output artifact path, and local app integration are described. No model was trained and no dataset or code behavior was changed as part of this documentation task.
+
 ## 6. Remaining work before a credible SIH demonstration
 
 1. The code-level test suite and GUI smoke checks passed, but validate all processing against sponsor ground-truth captures.
