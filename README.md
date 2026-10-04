@@ -66,7 +66,16 @@ This status table is intentional: the system integrates analysis and decoding wo
 
 ## Free hosting
 
-`render.yaml` defines a free Render web service. Push this project to a repository you control, create a Render Blueprint from it, and deploy. The free tier can sleep and has limited CPU/RAM/disk; 100 MB upload limits and ephemeral files make it a demo host, not an operational data platform. Keep large capture data out of Git and out of hosted sessions. The app processes uploads in memory for bounded sample windows; use local mode for the multi-gigabyte public capture.
+`render.yaml` defines a free Docker-based Render web service. Sign in to Render, create a Blueprint from this repository, and deploy the `render.yaml` service. It runs as a non-root user, uses a health check, and excludes local captures and models from the image. The free tier can sleep and has limited CPU/RAM/disk; 100 MB upload limits and ephemeral files make it a demo host, not an operational data platform. Keep large capture data out of Git and out of hosted sessions. The app processes uploads in memory for bounded sample windows; use local mode for the multi-gigabyte public capture.
+
+To run the same hosted-mode container locally under the demo memory/CPU limits:
+
+```sh
+docker build -t sih26147:local .
+docker run --rm --publish 8501:8501 --cpus=0.1 --memory=512m --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m sih26147:local
+```
+
+Open `http://localhost:8501`. Hosted mode intentionally disables local-path access; use the native local quick start for private files.
 
 ## Validation
 

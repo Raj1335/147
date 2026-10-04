@@ -1,12 +1,11 @@
 services:
   - type: web
     name: sih26147-signal-workbench
-    runtime: python
+    runtime: docker
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run app.py --server.address 0.0.0.0 --server.port $PORT
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /_stcore/health
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.8
       - key: SIH_HOSTED
         value: "true"

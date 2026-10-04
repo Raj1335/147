@@ -41,3 +41,21 @@ jobs:
 
       - name: Audit dependencies
         run: python -m pip_audit -r requirements.txt
+
+      - name: Build container
+        run: docker build --tag sih26147:ci .
+
+      - name: Smoke-test non-root read-only container
+        run: |
+          docker run --detach --name sih26147-ci --publish 8501:8501 --cpus=0.1 --memory=512m --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m sih26147:ci
+          test "$(docker exec sih26147-ci id -u)" -ne 0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8501/_stcore/health; then
+              docker rm --force sih26147-ci
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs sih26147-ci
+          docker rm --force sih26147-ci
+          exit 1
