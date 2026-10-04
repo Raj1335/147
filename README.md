@@ -25,6 +25,7 @@ Open the local URL printed by Streamlit.
 - `.wav`: uncompressed PCM mono real or stereo I/Q; sample rate comes from the WAV header.
 - Raw `.iq`, `.bin`, `.dat`: interleaved `cf32`, `ci16`, or `cu8`; the sample rate, format, and optional center frequency must be supplied by the analyst.
 - The web uploader is capped at 100 MB and analysis is capped at 1,000,000 samples per selected window. The UI lets a user change the starting sample to inspect another window. This avoids claiming whole multi-gigabyte uploads are processed in a free web instance.
+- **Load synthetic QPSK demo** generates a small capture in memory, runs analysis and preamble-assisted demodulation, and compares against its known bits. The UI and JSON report label it as synthetic; it is not a real capture or accuracy benchmark.
 - `python datasets/download_public_capture.py --confirm-download-7-7gb` explicitly downloads a public, real UHF recording. See [`datasets/README.md`](datasets/README.md) for its source, license, labels, size, and annotation caveats.
 - The development workspace may contain a 16 MiB measured-data prefix at `data/real/pslv-436500kHz-2018-01-13-095446-prefix-16MiB.wav`. Choose **Local file path** in the app; the path is prefilled when this sample exists. Its adjacent sidecar identifies it as an unverified, incomplete prefix, not a full capture or training corpus.
 - Train a real-data model only after labeling multiple independent captured sessions. First copy the manifest template, then populate and review every row:

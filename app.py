@@ -18,6 +18,8 @@ from sih26147.demod import (
     demodulate,
     demodulate_from_estimate,
 )
+from sih26147.demo import generate_qpsk_demo
+from sih26147.dsp import demodulate_chain
 from sih26147.ingest import Capture, CaptureError, DEFAULT_SAMPLE_LIMIT, read_capture
 from sih26147.training import predict_with_trained_model
 from sih26147.validation import run_reference_validation
@@ -156,6 +158,8 @@ def main() -> None:
             help="Bounds analysis memory. Choose a different start sample to inspect another window.",
         )
         analyze_clicked = st.button("Analyze capture", type="primary", width="stretch")
+        demo_clicked = st.button("Load synthetic QPSK demo", width="stretch")
+        st.caption("Demo is generated in memory; it is not measured radio data.")
         st.divider()
         st.caption("No capture is stored on a server by this application code. Hosted platform logs/storage policies still apply.")
 
@@ -188,22 +192,43 @@ def main() -> None:
                         first_sample=int(first_sample),
                         sample_limit=int(sample_limit),
                     )
-                result = analyze_capture(capture)
-                st.session_state["capture"] = capture
-                st.session_state["analysis"] = result
-                st.session_state["bits"] = ""
-                st.session_state.pop("analog_audio_wav", None)
-                st.session_state.pop("analog_audio_details", None)
-                model_path = Path("models/modulation.joblib")
-                if model_path.is_file():
-                    st.session_state["trained_prediction"] = predict_with_trained_model(
-                        model_path, capture.samples, capture.sample_rate_hz
-                    )
-                else:
-                    st.session_state.pop("trained_prediction", None)
+                _store_capture(capture)
                 st.success(f"Analyzed {capture.samples.size:,} samples from {capture.source_name}.")
             except (CaptureError, ValueError, OSError) as exc:
                 st.error(f"Capture analysis failed: {exc}")
+
+    if demo_clicked:
+        try:
+            demo = generate_qpsk_demo()
+            demodulated = demodulate_chain(
+                demo.capture.samples,
+                demo.capture.sample_rate_hz,
+                demo.demod_config,
+            )
+            if demodulated.bits.size != demo.reference_bits.size:
+                raise ValueError("Synthetic demo decode returned an unexpected bit count.")
+            bit_error_rate = float(np.mean(demodulated.bits != demo.reference_bits))
+            passed = bit_error_rate < 0.02 and demodulated.lock
+            demo_validation = {
+                "bit_error_rate": bit_error_rate,
+                "snr_db": demo.snr_db,
+                "passed": passed,
+            }
+            _store_capture(
+                demo.capture,
+                bits="".join(map(str, demodulated.bits.tolist())),
+                demo_validation=demo_validation,
+            )
+            if passed:
+                st.success(
+                    f"Synthetic demo loaded; known-source QPSK BER is {bit_error_rate:.4f}."
+                )
+            else:
+                st.error(
+                    f"Synthetic demo pipeline did not meet its BER gate ({bit_error_rate:.4f})."
+                )
+        except (ValueError, OSError) as exc:
+            st.error(f"Synthetic demo failed: {exc}")
 
     capture: Capture | None = st.session_state.get("capture")
     result: SignalAnalysis | None = st.session_state.get("analysis")
@@ -211,6 +236,15 @@ def main() -> None:
         _show_welcome()
         _show_validation_lab()
         return
+
+    demo_validation = st.session_state.get("demo_validation")
+    if demo_validation is not None:
+        demo_status = "PASS" if demo_validation["passed"] else "FAIL"
+        st.info(
+            f"SYNTHETIC DEMO ONLY · {demo_status} · "
+            f"known-source BER {demo_validation['bit_error_rate']:.4f} at "
+            f"{demo_validation['snr_db']:.1f} dB SNR; this is not measured radio data."
+        )
 
     st.markdown(
         f"""
@@ -232,6 +266,32 @@ def main() -> None:
         _show_validation_lab()
     with tabs[3]:
         _show_report(result)
+
+
+def _store_capture(
+    capture: Capture,
+    *,
+    bits: str = "",
+    demo_validation: dict[str, float | bool] | None = None,
+) -> SignalAnalysis:
+    result = analyze_capture(capture)
+    st.session_state["capture"] = capture
+    st.session_state["analysis"] = result
+    st.session_state["bits"] = bits
+    st.session_state.pop("analog_audio_wav", None)
+    st.session_state.pop("analog_audio_details", None)
+    if demo_validation is None:
+        st.session_state.pop("demo_validation", None)
+    else:
+        st.session_state["demo_validation"] = demo_validation
+    model_path = Path("models/modulation.joblib")
+    if model_path.is_file():
+        st.session_state["trained_prediction"] = predict_with_trained_model(
+            model_path, capture.samples, capture.sample_rate_hz
+        )
+    else:
+        st.session_state.pop("trained_prediction", None)
+    return result
 
 
 def _show_welcome() -> None:
@@ -687,6 +747,15 @@ def _show_report(result: SignalAnalysis) -> None:
     }
     if "trained_prediction" in st.session_state:
         report["trained_model_result"] = st.session_state["trained_prediction"]
+    demo_validation = st.session_state.get("demo_validation")
+    if demo_validation is not None:
+        report["synthetic_demo_validation"] = {
+            "fixture": "generated RRC-shaped QPSK with a known source bit stream",
+            "snr_db": demo_validation["snr_db"],
+            "bit_error_rate": demo_validation["bit_error_rate"],
+            "passed": demo_validation["passed"],
+            "measured_data": False,
+        }
     if "analog_audio_details" in st.session_state:
         mode, source_name, output_rate = st.session_state["analog_audio_details"]
         report["analog_audio_demodulation"] = {
