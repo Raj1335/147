@@ -8,6 +8,8 @@ from .carrier import estimate_carrier_offset
 from .filters import rrc_taps
 from .mapping import qpsk_gray_indices
 
+_QPSK_BIT_SHIFTS = np.asarray([1, 0], dtype=np.int64)
+
 
 @dataclass(frozen=True)
 class DemodConfig:
@@ -48,8 +50,12 @@ def demodulate_chain(iq: np.ndarray, fs: float, cfg: DemodConfig) -> DemodResult
     symbol_rate_hz = float(cfg.symbol_rate_hz)
     if not np.isfinite(symbol_rate_hz) or symbol_rate_hz <= 0:
         raise ValueError("Symbol rate must be positive.")
-    sps = cfg.samples_per_symbol or max(2, int(round(fs / symbol_rate_hz)))
-    sps = int(sps)
+    if cfg.samples_per_symbol is None:
+        sps = max(2, int(round(fs / symbol_rate_hz)))
+    elif isinstance(cfg.samples_per_symbol, (int, np.integer)):
+        sps = int(cfg.samples_per_symbol)
+    else:
+        raise ValueError("samples_per_symbol must be an integer.")
     if sps < 2:
         raise ValueError("At least two samples per symbol are required.")
     if not np.isclose(fs / sps, symbol_rate_hz, rtol=0.01):
@@ -146,7 +152,7 @@ def demodulate_chain(iq: np.ndarray, fs: float, cfg: DemodConfig) -> DemodResult
                 candidate_bits = qpsk_gray_indices(candidate_indices)
             else:
                 candidate_bits = (
-                    (candidate_indices[:, None] >> np.asarray([1, 0])) & 1
+                    (candidate_indices[:, None] >> _QPSK_BIT_SHIFTS) & 1
                 ).astype(np.uint8).reshape(-1)
             errors = int(np.count_nonzero(candidate_bits[: reference.size] != reference))
             rotation_errors.append(errors)
@@ -163,7 +169,7 @@ def demodulate_chain(iq: np.ndarray, fs: float, cfg: DemodConfig) -> DemodResult
     if cfg.gray:
         bits = qpsk_gray_indices(nearest)
     else:
-        bits = ((nearest[:, None] >> np.asarray([1, 0])) & 1).astype(np.uint8).reshape(-1)
+        bits = ((nearest[:, None] >> _QPSK_BIT_SHIFTS) & 1).astype(np.uint8).reshape(-1)
     evm = float(np.sqrt(np.mean(np.abs(symbols - qpsk_values[nearest]) ** 2)))
 
     return DemodResult(
