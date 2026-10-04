@@ -31,13 +31,13 @@ jobs:
         run: python -m ruff check .
 
       - name: Type-check
-        run: python -m mypy --config-file pyproject.toml sih26147
+        run: python -m mypy --strict --config-file pyproject.toml sih26147
 
       - name: Check Markdown files for NUL bytes
         run: python -c "from pathlib import Path; bad = [str(p) for p in Path('.').rglob('*.md') if b'\0' in p.read_bytes()]; print('\n'.join(bad)); raise SystemExit(bool(bad))"
 
       - name: Test with coverage
-        run: python -m pytest --cov=sih26147 --cov-report=term-missing
+        run: python -m pytest --cov=sih26147 --cov-report=term-missing --cov-fail-under=85
 
       - name: Audit dependencies
         run: python -m pip_audit -r requirements.txt

@@ -29,6 +29,35 @@ def _float_wav_bytes(samples: np.ndarray, rate: int = 48_000) -> bytes:
     return b"RIFF" + struct.pack("<I", len(body)) + body
 
 
+def _pcm_wav_bytes(
+    payload: bytes,
+    *,
+    width: int = 2,
+    channels: int = 1,
+    rate: int = 48_000,
+    block_align: int | None = None,
+    format_tag: int = 1,
+) -> bytes:
+    alignment = channels * width if block_align is None else block_align
+    fmt = struct.pack(
+        "<HHIIHH",
+        format_tag,
+        channels,
+        rate,
+        rate * alignment,
+        alignment,
+        width * 8,
+    )
+    body = b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt
+    body += b"data" + struct.pack("<I", len(payload)) + payload
+    return b"RIFF" + struct.pack("<I", len(body)) + body
+
+
+class _NonSeekableBytesIO(io.BytesIO):
+    def seekable(self) -> bool:
+        return False
+
+
 def test_raw_ci16_reads_iq_and_selected_window() -> None:
     iq = np.asarray([1000, -1000, 2000, -2000, 3000, -3000], dtype="<i2")
     capture = read_capture(
@@ -110,3 +139,95 @@ def test_float_wav_rejects_non_finite_samples() -> None:
     samples = np.asarray([0.25, np.nan], dtype=np.float32)
     with pytest.raises(CaptureError, match="NaN or infinite"):
         read_capture(_float_wav_bytes(samples), source_name="invalid.wav")
+
+
+@pytest.mark.parametrize(
+    ("source", "source_name", "options", "error"),
+    [
+        (b"\0" * 16, "capture.iq", {"first_sample": -1}, "First sample"),
+        (b"\0" * 16, "capture.iq", {"sample_limit": 1}, "Sample limit"),
+        (b"\0" * 16, "capture.iq", {"center_frequency_hz": -1}, "Center frequency"),
+        (b"\0" * 16, "capture.txt", {}, "Choose a"),
+        (b"\0" * 16, "capture.iq", {"raw_format": "bad"}, "Raw format"),
+        (b"\0" * 16, "capture.iq", {}, "sample rate is required"),
+        (b"\0" * 3, "capture.iq", {"raw_format": "ci16", "sample_rate_hz": 1}, "incomplete I/Q"),
+        (b"\0" * 8, "capture.iq", {"raw_format": "cf32", "sample_rate_hz": 1}, "at least two"),
+        (
+            np.asarray([np.nan, 0, 0, 0], dtype="<f4").tobytes(),
+            "capture.iq",
+            {"raw_format": "cf32", "sample_rate_hz": 1},
+            "NaN or infinite",
+        ),
+    ],
+)
+def test_raw_capture_rejects_invalid_inputs(
+    source: bytes, source_name: str, options: dict[str, object], error: str
+) -> None:
+    with pytest.raises(CaptureError, match=error):
+        read_capture(source, source_name=source_name, **options)
+
+
+def test_raw_capture_rejects_non_seekable_stream_and_out_of_range_start() -> None:
+    data = np.asarray([1, 2, 3, 4], dtype="<i2").tobytes()
+    with pytest.raises(CaptureError, match="must be seekable"):
+        read_capture(
+            _NonSeekableBytesIO(data),
+            source_name="capture.iq",
+            raw_format="ci16",
+            sample_rate_hz=1,
+        )
+    with pytest.raises(CaptureError, match="beyond the end"):
+        read_capture(
+            data,
+            source_name="capture.iq",
+            raw_format="ci16",
+            sample_rate_hz=1,
+            first_sample=2,
+        )
+
+
+@pytest.mark.parametrize(
+    ("payload", "width", "expected"),
+    [
+        (bytes([0, 128, 255, 255]), 1, [-1.0, 0.0, 127 / 128, 127 / 128]),
+        (
+            bytes([0, 0, 128, 255, 255, 127]),
+            3,
+            [-1.0, 8_388_607 / 8_388_608],
+        ),
+        (
+            np.asarray([-2_147_483_648, 2_147_483_647], dtype="<i4").tobytes(),
+            4,
+            [-1.0, 2_147_483_647 / 2_147_483_648],
+        ),
+    ],
+)
+def test_pcm_wav_supports_additional_sample_widths(
+    payload: bytes, width: int, expected: list[float]
+) -> None:
+    capture = read_capture(
+        _pcm_wav_bytes(payload, width=width),
+        source_name="width.wav",
+    )
+    assert capture.samples.real.tolist() == pytest.approx(expected)
+
+
+def test_pcm_wav_rejects_invalid_channel_count_sample_rate_and_width() -> None:
+    stereo_data = _pcm_wav_bytes(b"\0" * 12, channels=3)
+    with pytest.raises(CaptureError, match="mono or stereo"):
+        read_capture(stereo_data, source_name="channels.wav")
+    zero_rate = _pcm_wav_bytes(b"\0" * 4, rate=0)
+    with pytest.raises(CaptureError, match="invalid sample rate"):
+        read_capture(zero_rate, source_name="rate.wav")
+    unsupported_width = _pcm_wav_bytes(b"\0" * 12, width=6)
+    with pytest.raises(CaptureError, match="Unsupported PCM sample width"):
+        read_capture(unsupported_width, source_name="width.wav")
+
+
+def test_pcm_wav_rejects_bad_format_and_out_of_range_start() -> None:
+    compressed = _pcm_wav_bytes(b"\0" * 4, format_tag=6)
+    with pytest.raises(CaptureError, match="Compressed WAV"):
+        read_capture(compressed, source_name="compressed.wav")
+    valid = _wav_bytes(np.arange(4, dtype=np.int16))
+    with pytest.raises(CaptureError, match="beyond the end"):
+        read_capture(valid, source_name="past-end.wav", first_sample=4)

@@ -7,6 +7,7 @@ import numpy as np
 from .carrier import estimate_carrier_offset
 from .filters import rrc_taps
 from .mapping import qpsk_gray_indices
+from .timing import estimate_timing_offset
 
 _QPSK_BIT_SHIFTS = np.asarray([1, 0], dtype=np.int64)
 

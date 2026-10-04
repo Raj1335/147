@@ -155,7 +155,8 @@ def _read_wav(
     sample_limit: int,
     center_frequency_hz: float | None,
 ) -> Capture:
-    if _wav_format_tag(stream) == 3:
+    format_tag = _wav_format_tag(stream)
+    if format_tag == 3:
         return _read_float_wav(
             stream,
             source_name=source_name,
@@ -163,6 +164,8 @@ def _read_wav(
             sample_limit=sample_limit,
             center_frequency_hz=center_frequency_hz,
         )
+    if format_tag != 1:
+        raise CaptureError("Compressed WAV is not supported; provide uncompressed PCM WAV.")
     try:
         reader = wave.open(stream, "rb")
     except (wave.Error, EOFError) as exc:

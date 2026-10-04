@@ -71,7 +71,7 @@ This status table is intentional: the system integrates analysis and decoding wo
 ## Validation
 
 ```sh
-python -m pytest
+python -m pytest --cov=sih26147 --cov-report=term-missing --cov-fail-under=85
 ```
 
 Tests use small deterministic signals only to verify algorithms. They are not training data and are not evidence of real-world modulation-classification accuracy.
