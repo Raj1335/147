@@ -1,7 +1,11 @@
 __pycache__/
 .pytest_cache/
+.coverage
+.coverage.*
 .venv/
 *.py[cod]
+*.png
+/*.png
 .streamlit/secrets.toml
 data/
 sih26147/dsd/

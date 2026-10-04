@@ -55,7 +55,8 @@ def demodulate(
         symbol_freq = symbol_freq[: len(symbols)]
         low_tone_distance = np.abs(symbol_freq + fsk_deviation_hz)
         high_tone_distance = np.abs(symbol_freq - fsk_deviation_hz)
-        return (high_tone_distance < low_tone_distance).astype(np.uint8)
+        decision = np.asarray(high_tone_distance < low_tone_distance, dtype=bool)
+        return decision.astype(np.uint8)
     raise ValueError("Supported hard-decision modes: BPSK, QPSK, 8PSK, 16QAM, 2FSK.")
 
 
@@ -84,6 +85,8 @@ def demodulate_from_estimate(
         if count < 1:
             raise ValueError("No symbols remain after applying the estimated timing phase.")
         output = np.empty(count, dtype=np.uint8)
+        if estimate.frequency_offset_hz is None:
+            raise ValueError("The automatic 2FSK estimate lacks a valid center frequency.")
         for index in range(count):
             start = int(round(estimate.timing_offset_samples + index * spacing))
             end = min(

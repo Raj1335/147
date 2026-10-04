@@ -45,14 +45,14 @@ def _decode_pcm_bytes(raw: bytes, width: int) -> np.ndarray:
         return values / 32768.0
     if width == 3:
         triples = np.frombuffer(raw, dtype=np.uint8)
-        triples = triples[: len(triples) // 3 * 3].reshape(-1, 3)
-        values = (
-            triples[:, 0].astype(np.int32)
-            | (triples[:, 1].astype(np.int32) << 8)
-            | (triples[:, 2].astype(np.int32) << 16)
+        packed = triples[: len(triples) // 3 * 3].reshape(-1, 3)
+        signed_values = (
+            packed[:, 0].astype(np.int32)
+            | (packed[:, 1].astype(np.int32) << 8)
+            | (packed[:, 2].astype(np.int32) << 16)
         )
-        values = (values ^ 0x800000) - 0x800000
-        return values.astype(np.float32) / 8388608.0
+        signed_values = (signed_values ^ 0x800000) - 0x800000
+        return signed_values.astype(np.float32) / 8388608.0
     if width == 4:
         values = np.frombuffer(raw, dtype="<i4").astype(np.float32)
         return values / 2147483648.0
@@ -203,12 +203,12 @@ def _read_wav(
         count = min(sample_limit, total - first_sample)
         values = _read_pcm_samples(reader, width, count * channels)
         frames = values.size // channels
-        values = values[: frames * channels].reshape(frames, channels)
+        frame_values = np.asarray(values[: frames * channels], dtype=np.float32).reshape(frames, channels)
         if channels == 2:
-            samples = (values[:, 0] + 1j * values[:, 1]).astype(np.complex64)
+            samples = (frame_values[:, 0] + 1j * frame_values[:, 1]).astype(np.complex64)
             source_format = f"wav-pcm{width * 8}-iq"
         else:
-            samples = values[:, 0].astype(np.complex64)
+            samples = frame_values[:, 0].astype(np.complex64)
             source_format = f"wav-pcm{width * 8}-mono"
     if samples.size < 2:
         raise CaptureError("WAV did not contain enough complete frames.")
@@ -280,12 +280,12 @@ def _read_zero_size_pcm_wav(
     stream.seek(data_offset + first_sample * block_align)
     values = _decode_pcm_bytes(stream.read(count * block_align), width)
     frames = values.size // channels
-    values = values[: frames * channels].reshape(frames, channels)
+    frame_values = np.asarray(values[: frames * channels], dtype=np.float32).reshape(frames, channels)
     if channels == 2:
-        samples = (values[:, 0] + 1j * values[:, 1]).astype(np.complex64)
+        samples = (frame_values[:, 0] + 1j * frame_values[:, 1]).astype(np.complex64)
         source_format = f"wav-pcm{bits}-iq"
     else:
-        samples = values[:, 0].astype(np.complex64)
+        samples = frame_values[:, 0].astype(np.complex64)
         source_format = f"wav-pcm{bits}-mono"
     if samples.size < 2:
         raise CaptureError("WAV did not contain enough complete frames.")
@@ -317,9 +317,9 @@ def _wav_format_tag(stream: BinaryIO) -> int:
                 break
             fmt = stream.read(chunk_size)
             stream.seek(chunk_size & 1, io.SEEK_CUR)
-            tag = struct.unpack_from("<H", fmt)[0]
+            tag = int(struct.unpack_from("<H", fmt)[0])
             if tag == 0xFFFE and chunk_size >= 40:
-                tag = struct.unpack_from("<H", fmt, 24)[0]
+                tag = int(struct.unpack_from("<H", fmt, 24)[0])
             stream.seek(0)
             return tag
         stream.seek(chunk_size + (chunk_size & 1), io.SEEK_CUR)
@@ -359,7 +359,7 @@ def _read_float_wav(
         raise CaptureError("WAV file is missing a format or data chunk.")
     tag, channels, rate, _, block_align, bits = struct.unpack_from("<HHIIHH", fmt)
     if tag == 0xFFFE and len(fmt) >= 40:
-        tag = struct.unpack_from("<H", fmt, 24)[0]
+        tag = int(struct.unpack_from("<H", fmt, 24)[0])
     if tag != 3 or bits != 32 or channels not in (1, 2) or block_align != channels * 4:
         raise CaptureError("Only float32 IEEE-float WAV or uncompressed PCM WAV is supported.")
     total = data_size // block_align
@@ -374,11 +374,11 @@ def _read_float_wav(
     if not np.all(np.isfinite(values)):
         raise CaptureError("WAV contains NaN or infinite samples.")
     frames = values.size // channels
-    values = values[: frames * channels].reshape(frames, channels)
+    frame_values = np.asarray(values[: frames * channels], dtype=np.float32).reshape(frames, channels)
     samples = (
-        (values[:, 0] + 1j * values[:, 1]).astype(np.complex64)
+        (frame_values[:, 0] + 1j * frame_values[:, 1]).astype(np.complex64)
         if channels == 2
-        else values[:, 0].astype(np.complex64)
+        else frame_values[:, 0].astype(np.complex64)
     )
     if samples.size < 2:
         raise CaptureError("WAV did not contain enough complete frames.")

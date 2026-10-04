@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sih26147"
+version = "0.1.0"
+description = "Signal Intelligence Workbench for capture analysis and demodulation workflows"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Raj1335" }]
+dependencies = [
+    "numpy>=2.2,<3",
+    "scipy>=1.15,<2",
+    "streamlit>=1.50,<2",
+    "plotly>=6,<7",
+    "scikit-learn>=1.6,<2",
+    "joblib>=1.4,<2",
+    "reedsolo>=1.7,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-cov>=5,<7",
+    "hypothesis>=6,<7",
+    "ruff>=0.8,<1",
+    "mypy>=1.11,<2",
+    "pip-audit>=2.7,<3",
+]
+
+[tool.setuptools]
+packages = {find = {include = ["sih26147*"]}}
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+check_untyped_defs = false
+pretty = true
+
+[[tool.mypy.overrides]]
+module = ["scipy.*", "streamlit.*", "plotly.*", "sklearn.*", "reedsolo.*", "joblib"]
+ignore_missing_imports = true
